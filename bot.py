@@ -1,7 +1,7 @@
 import os
 import re
 from telegram import Bot, Update
-from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, MessageHandler, filters, CallbackContext
 
 # Get token from environment variable
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -71,3 +71,4 @@ def main():
 
 if name == "main":
     main()
+
