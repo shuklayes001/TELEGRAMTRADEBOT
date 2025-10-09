@@ -1,41 +1,73 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-import os, re
+import os
+import re
+from telegram import Bot, Update
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # token will come from Render environment
+# Get token from environment variable
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("Bot token not found! Please set BOT_TOKEN as environment variable.")
 
+bot = Bot(token=BOT_TOKEN)
+
+# Function to format trade message
 def format_trade_message(text: str):
-    pattern = r"(LONG|SHORT).*?COIN:\s*([\w/]+).*?LEVERAGE:\s*(\d+x).*?ENTRY:\s*([\d.]+).*?TP1:\s*([\d.]+).*?TP2:\s*([\d.]+).*?TP3:\s*([\d.]+).*?TP4:\s*([\d.]+).*?STOP:\s*([\d.]+)"
-    match = re.search(pattern, text, re.S | re.I)
-    
-    if match:
-        direction = match.group(1).upper()
-        coin = match.group(2).upper()
-        leverage = match.group(3)
-        entry = match.group(4)
-        tp1, tp2, tp3, tp4 = match.group(5), match.group(6), match.group(7), match.group(8)
-        stop = match.group(9)
-        emoji = "🟢" if direction == "LONG" else "🔴"
+    # Detect LONG or SHORT
+    direction_match = re.search(r"(LONG|SHORT)", text, re.I)
+    direction = direction_match.group(1).upper() if direction_match else "TRADE"
+    emoji = "🟢" if direction == "LONG" else "🔴"
 
-        return (
-            f"{emoji} *{direction} Trade Setup*\n\n"
-            f"💹 *Coin:* {coin}\n"
-            f"⚙️ *Leverage:* {leverage}\n"
-            f"💰 *Entry:* {entry}\n"
-            f"🎯 *Targets:* {tp1} / {tp2} / {tp3} / {tp4}\n"
-            f"❌ *Stop Loss:* {stop}\n\n"
-            f"📊 Risk: Trade only with 5–10% of your funds.\n"
-            f"Enter in parts for better risk management. 🚀"
-        )
+    heading = f"{emoji} {direction} TRADE SETUP {emoji}\n\n"
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Detect COIN
+    coin_match = re.search(r"COIN[:\s]*([\w/]+)", text, re.I)
+    coin = coin_match.group(1).upper() if coin_match else "UNKNOWN"
+    coin_line = f"▶️ COIN: {coin}"
+
+    # Detect LEVERAGE
+    leverage_match = re.search(r"LEVERAGE[:\s]*([\d]+x)", text, re.I)
+    leverage = leverage_match.group(1) if leverage_match else "N/A"
+    leverage_line = f"LEVERAGE: {leverage}\n"
+
+    # Detect ENTRY
+    entry_match = re.search(r"ENTRY[:\s]*([\d.]+)", text, re.I)
+    entry = entry_match.group(1) if entry_match else "N/A"
+    entry_line = f"\n📌 ENTRY: {entry}\n"
+
+    # Detect all TPs
+    tps = re.findall(r"TP\d*[:\s]*([\d.]+)", text, re.I)
+    tp_lines = ""
+    for idx, tp in enumerate(tps, start=1):
+        tp_lines += f"🎯 TP{idx}: {tp}\n"
+
+    # Detect STOP
+    stop_match = re.search(r"STOP[:\s]*([\d.]+)", text, re.I)
+    stop = stop_match.group(1) if stop_match else "N/A"
+    stop_line = f"\n❌ STOP: {stop}\n"
+
+    # Risk note
+    risk_note = "\n(Trade only with 5-10% of your funds\nEnter in parts for better risk management) 🚀"
+
+    formatted_message = heading + coin_line + "\n" + leverage_line + entry_line + tp_lines + stop_line + risk_note
+    return formatted_message
+
+# Handler for messages
+def handle_message(update: Update, context: CallbackContext):
     text = update.message.text
     formatted = format_trade_message(text)
-    if formatted:
-        await update.message.reply_text(formatted, parse_mode="Markdown")
+    update.message.reply_text(formatted)
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+def main():
+    updater = Updater(token=BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-print("🤖 Bot is running...")
-app.run_polling()
+    # Listen to all text messages
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+
+    # Start the bot
+    print("🤖 Bot is running...")
+    updater.start_polling()
+    updater.idle()
+
+if name == "main":
+    main()
