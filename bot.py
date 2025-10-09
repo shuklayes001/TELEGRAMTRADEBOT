@@ -1,16 +1,13 @@
 import os
 import re
-from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackContext
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-# Get token from environment variable
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("Bot token not found! Please set BOT_TOKEN as environment variable.")
 
-bot = Bot(token=BOT_TOKEN)
-
-# Function to format trade message
+# Function to format trade messages
 def format_trade_message(text: str):
     # Detect LONG or SHORT
     direction_match = re.search(r"(LONG|SHORT)", text, re.I)
@@ -46,33 +43,25 @@ def format_trade_message(text: str):
     stop_line = f"\n❌ STOP: {stop}\n"
 
     # Risk note
-    risk_note = "\n(Trade only with 5-10% of your funds\nEnter in parts for better risk management) 🚀"
+    risk_note = "\n(Trade only with 5-10% of your funds\nEnter in parts for better risk management) 🚀 By SANDY..."
 
     formatted_message = heading + coin_line + "\n" + leverage_line + entry_line + tp_lines + stop_line + risk_note
     return formatted_message
 
 # Handler for messages
-def handle_message(update: Update, context: CallbackContext):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     formatted = format_trade_message(text)
-    update.message.reply_text(formatted)
+    await update.message.reply_text(formatted)
 
 def main():
-    updater = Updater(token=BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Listen to all text messages
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Start the bot
     print("🤖 Bot is running...")
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
