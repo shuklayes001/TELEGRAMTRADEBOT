@@ -1,67 +1,67 @@
-import os
-import re
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+import re
+import os
 
+# Get bot token from environment variable
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("Bot token not found! Please set BOT_TOKEN as environment variable.")
 
-# Function to format trade messages
-def format_trade_message(text: str):
-    # Detect LONG or SHORT
-    direction_match = re.search(r"(LONG|SHORT)", text, re.I)
-    direction = direction_match.group(1).upper() if direction_match else "TRADE"
-    emoji = "🟢" if direction == "LONG" else "🔴"
+# Function to detect and format trade message
+async def format_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
 
-    heading = f"{emoji} {direction} TRADE SETUP {emoji}\n\n"
+    # Regex pattern to extract trade info (handles both BTC and BTC/USDT)
+    pattern = re.compile(
+        r"(?i)([A-Z/]+)\s*(long|short)\s*([\d\.]+)\s*(\d+x).*?tp\s*([\d\.,\s]+).*?(?:sl|stop)\s*([\d\.]+)"
+    )
 
-    # Detect COIN
-    coin_match = re.search(r"COIN[:\s]*([\w/]+)", text, re.I)
-    coin = coin_match.group(1).upper() if coin_match else "UNKNOWN"
-    coin_line = f"▶️ COIN: {coin}"
+    match = pattern.search(text)
+    if not match:
+        await update.message.reply_text("❌ Couldn't understand the message format.")
+        return
 
-    # Detect LEVERAGE
-    leverage_match = re.search(r"LEVERAGE[:\s]*([\d]+x)", text, re.I)
-    leverage = leverage_match.group(1) if leverage_match else "N/A"
-    leverage_line = f"LEVERAGE: {leverage}\n"
+    coin, direction, entry, leverage, tps, stop = match.groups()
 
-    # Detect ENTRY
-    entry_match = re.search(r"ENTRY[:\s]*([\d.]+)", text, re.I)
-    entry = entry_match.group(1) if entry_match else "N/A"
-    entry_line = f"\n📌 ENTRY: {entry}\n"
+    # Normalize coin pair
+    coin = coin.upper()
+    if "/" not in coin:
+        coin = f"{coin}/USDT"
 
-    # Detect all TPs
-    tps = re.findall(r"TP\d*[:\s]*([\d.]+)", text, re.I)
-    tp_lines = ""
-    for idx, tp in enumerate(tps, start=1):
-        tp_lines += f"🎯 TP{idx}: {tp}\n"
+    # Clean and split TPs
+    tp_values = [tp.strip() for tp in re.split(r"[, ]+", tps) if tp.strip()]
 
-    # Detect STOP
-    stop_match = re.search(r"STOP[:\s]*([\d.]+)", text, re.I)
-    stop = stop_match.group(1) if stop_match else "N/A"
-    stop_line = f"\n❌ STOP: {stop}\n"
+    # Choose headers and footers
+    if direction.lower() == "long":
+        header = "🟢 LONG TRADE SETUP 🟢"
+        footer = "(Trade only with 5–10% of your funds\nEnter in parts for better risk management) 🚀"
+    else:
+        header = "🔴 SHORT TRADE SETUP 🔴"
+        footer = "(Trade only with 5–10% of your funds) 🚀"
 
-    # Risk note
-    risk_note = "\n(Trade only with 5-10% of your funds\nEnter in parts for better risk management) 🚀 By SANDY..."
+    # Build formatted message
+    formatted = [
+        header,
+        "",
+        f"▶️ COIN: {coin}",
+        f"LEVERAGE: {leverage}",
+        "",
+        f"📌 ENTRY: {entry}",
+        ""
+    ]
 
-    formatted_message = heading + coin_line + "\n" + leverage_line + entry_line + tp_lines + stop_line + risk_note
-    return formatted_message
+    for i, tp in enumerate(tp_values, 1):
+        formatted.append(f"🎯 TP{i}: {tp}")
 
-# Handler for messages
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    formatted = format_trade_message(text)
-    await update.message.reply_text(formatted)
+    formatted.append("")
+    formatted.append(f"❌ STOP: {stop}")
+    formatted.append("")
+    formatted.append(footer)
 
-def main():
+    await update.message.reply_text("\n".join(formatted))
+
+# Start bot
+if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Listen to all text messages
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, format_trade))
     print("🤖 Bot is running...")
     app.run_polling()
-
-if __name__ == "__main__":
-    main()
