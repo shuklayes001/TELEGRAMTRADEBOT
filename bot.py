@@ -1,3 +1,13 @@
+# Temporary debug handler to find topic ID
+async def debug_topic_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"Chat ID: {update.message.chat_id}")
+    print(f"Message Thread ID (Topic ID): {update.message.message_thread_id}")
+    await update.message.reply_text("✅ Check console for IDs")
+
+# Add this handler before app.run_polling()
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, debug_topic_id))
+
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 import re
@@ -65,3 +75,4 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, format_trade))
     print("🤖 Bot is running...")
     app.run_polling()
+
